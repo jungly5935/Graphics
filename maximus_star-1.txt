@@ -1,0 +1,1360 @@
+/*
+10th week (2020.05.18)
+(1)menu 추가
+(2)timer 추가  - rain표현 (재귀함수 특성 이용해서 비내리는 밤 표현)
+
+13th week(2020.6.8)
+(1) 조명 넣으려면, 서비스차원의 달빛 넣어주고
+(2) 얼굴 위에서 조명 on, 얼굴 아래에서 조명 off
+(3) 조명받는 하에서 얼굴색은 glMaterialfv로 설정해주고
+(4) 만약 조명을 안꺼주면? 한번 materialfv함수가 작동되면, 계속 효과있습니다.
+(5) 현재 z-buffer켜지지 않은 상황입니다. 조명 z값(앞뒤위치)이 예상치 못한 방향으로 나옴
+	빨간행성파란행성은 z-buffer가 켜져있기 때문에, 광원이 앞뒤이동할 때 조명을 잘 받습니다.
+	==> 조명 on/off할 때 z-buffer도 on/off해주면, 앞뒤이동시에도 조명이 잘 작동!!
+
+	Q12. 스포트라이트 소스에서
+		gluLookAt(0,0,3, 0,0,0, 0,1,0); 이렇게하면 우리가 모니터를 보는 느낌.ex)막시무스
+		
+	Q13. 스포트라이트 소스에서 LIGHT1 조명 끄면 어떤 그림 나올까요?
+		
+	Q14. 스포트라이트 컷오프 각도의 의미가 뭘까요? 컷오프를 10도로 구현하는 코딩 1줄을 적어보세요
+		컷오프는 스포트라이트 광원이 있을 때, 스포트라이트의절반 각도.
+
+	Q15. 0번 조명의 스포트라이트 컷오프를 45도로 지정하려 합니다.
+		glLightf함수를 썼을 때와, glLightfv함수를 썼을 때 두가지로 나누어 코딩하세요.
+		함수의 인자는 3개인데, 중간 인자는 GL_SPOT_CUTOFF를 넣으시면 됩니다.
+		-> glLightf(GL_LIGHT0, GL_SPOT_CUTOFF, 45.0)
+		   glLightfv(GL_LIGHT0, GL_SPOT_CUTOFF, 변수명) <- 여기변수명 = {45.0} 이런식.
+
+
+		  타이머를 이용한 막시무스의 움직임!
+		  -> idle, timer.
+
+
+*/
+
+#include<stdlib.h>
+#include<stdio.h>
+#include <glut.h>
+#include <math.h> 
+#include <glu.h>
+#include <time.h>
+#define Pi 3.1415 
+#define WIN_WIDTH 1200  // window 4:3
+#define WIN_HEIGHT 900
+
+unsigned char gFace = 'u';   // u:usual  a:angry   s:smiling
+GLfloat gY = 0.0;  // jump
+GLfloat gX = 0.0;  // moving-X
+GLfloat gZ = 0.0; //앞뒤이동
+
+
+GLfloat gBlueleg = 0.0;//회전각도 l,k
+GLfloat gBlackleg = 0.0; //f,d
+GLfloat gRedforearm = 0.0; // p, o (팔은 90 ~ -90)
+GLfloat gBlackforearm = 0.0; // e,r
+GLfloat gRedupperarm = 0.0; // p, o (팔은 90 ~ -90)ㅎ
+GLfloat gBlackupperarm = 0.0; // e,r
+GLfloat gRedarmlength = 1.0; //0 9 
+GLfloat gShear = 0.0, gShearleg = 0.0;
+
+GLfloat gBearShear = 0.0, gBearShearleg = 0.0;
+GLfloat gBearforearm = 0.0; //왼쪽팔 
+GLfloat gBeararm = 0.0; //오른쪽팔
+GLfloat gBearforeleg = 0.0; //왼쪽다리
+GLfloat gBearleg = 0.0; //오른쪽다리
+
+GLfloat gBearX = -2.5, gBearY = -1.5;
+GLint gNewWidth, gNewHeight;
+GLfloat gWidthFactor, gHeightFactor;
+
+unsigned char gBackground = 'D'; //낮
+GLint gTimeslot = 0;
+
+const GLfloat gFace_color[] = { 251 / 255.0, 206 / 255.0, 177 / 255.0,1.0 }; //조명하의 얼굴색
+const GLfloat gLight_pos[] = { -2,0,0,1 }; //광원위치
+
+const GLfloat polished[] = { 100.0 };
+
+const GLfloat gYellow[] = { 0.777,0.66,0.9,1 };
+const GLfloat gWhite[] = { 1,1,1,1 };
+const GLfloat gBlack[] = { 0,0,0,1};
+const GLfloat gBlue[] = { 0,0,1,1 };
+const GLfloat gRed[] = { 1,0,0,1 };
+const GLfloat gGray[] = { 0.5,0.5,0.5,1 };
+
+
+void YourBackground();
+void YourMat();
+void YourFace();
+void YourEyeMouth();
+void YourBody();
+void YourBear();
+void YourUmbrella();
+void YourBearUmbrella();
+void MyDisplay_star();
+
+void Star();
+void Moon();
+void Stardust();
+void Sk();
+void Shooting_Star();
+void Shooting();
+void Night_Timer();
+
+
+void MyDisplay() {
+
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+
+	glTranslatef(0, 0, -5); //무대 안 객체들 밀기
+
+	if (gBackground != 'S') {
+		YourBackground();
+		YourMat();
+	}
+
+	/* //반사
+	glRotatef(-45, 0, 0, 1);
+	glScalef(-1, 1, 1);
+	glRotatef(45, 0, 0, 1);
+
+	glTranslatef(2, 0, 0);
+	*/
+	glPushMatrix();
+	glTranslatef(gX, gY, gZ); //left, right, jump, 앞뒤
+
+	GLfloat Shear_arr[4][4] = {
+		{1,0,0,0},
+		{gShear,1,0,0},
+		{0,0,1,0},
+		{0,0,0,1},
+
+	};
+	glTranslatef(0, -1, 0); //발끝고정 3
+	glMultMatrixf((float*)Shear_arr); 
+	//현재막시무스 발끝 -1 임, 발끝고정 2
+	glTranslatef(0, 1, 0); //발끝고정 1
+
+	//glScalef(1, -1, 1); // x축에 대해 반사
+
+	YourFace();
+	YourEyeMouth();
+	YourBody(); 
+
+	YourUmbrella();
+	glPopMatrix();
+
+	glEnd();
+
+	//---------------------곰돌이(Something)--------------
+	glPushMatrix();
+	//glTranslatef(-2.5, -1.5, 0); //왼쪽아래로 위치 이동
+	glTranslatef(gBearX, gBearY, 0);
+	
+	GLfloat BearShear_arr[4][4] = { //전체 shear
+		{1,0,0,0},
+		{gBearShear,1,0,0},
+		{0,0,1,0},
+		{0,0,0,1},
+	
+	};
+	 
+	//왼쪽아래로 위치이동 한 것은 맨마지막에하는것!! 이기 때문에, 발끝 고정할때 0, -1.2 하는거는 그냥 곰돌이 발 아래위치 그대로! 이동시킬 필요 없음!
+	glTranslatef(0, -1.2, 0); //발끝고정 3
+	glMultMatrixf((float*)BearShear_arr);
+	// 발끝고정 2
+	glTranslatef(0, 1.2, 0); //발끝고정 1
+
+	YourBear();
+	YourBearUmbrella();
+
+	glPopMatrix();
+	
+
+	glutSwapBuffers();
+
+} // MyDisplay
+
+
+void MyDisplay_star() {
+
+	glPushMatrix();
+	GLfloat global_ambient[] = { 0.5, 0.5, 0.5, 1.0 };	//전역 주변반사
+
+	GLfloat Light1_Ambient[] = { 0.3, 0.3, 0.3, 1.0 };	//1번 광원 특성 (색상)
+	GLfloat Light1_Diffuse[] = { 0.3, 0.3, 0.3, 0.3 };
+	GLfloat Light1_Specular[] = { 1.0, 1.0, 1.0, 1.0 };
+
+
+	GLfloat Light1_Position[] = { 0.0, 0.0, 1.0, 1.0 };	//1번 광원위치 (전체 살짝)
+
+
+	glLightfv(GL_LIGHT1, GL_AMBIENT, Light1_Ambient);	//1번 광원 특성할당
+	glLightfv(GL_LIGHT1, GL_DIFFUSE, Light1_Diffuse);
+	glLightfv(GL_LIGHT1, GL_SPECULAR, Light1_Specular);
+
+	glLightf(GL_LIGHT0, GL_SPOT_EXPONENT, 1.0);	//코사인 승수
+
+	GLfloat material_ambient[] = { 0.0, 0.0, 0.0, 1.0 };	//물체 특성
+	GLfloat material_diffuse[] = { 1.0, 0.0, 0.0, 1.0 };
+	GLfloat material_specular[] = { 1.0, 1.0, 1.0, 1.0 };
+	GLfloat material_shininess[] = { 127.0 };
+
+	glMaterialfv(GL_FRONT, GL_DIFFUSE, material_diffuse);//물체 특성할당
+	glMaterialfv(GL_FRONT, GL_SPECULAR, material_specular);
+	glMaterialfv(GL_FRONT, GL_AMBIENT, material_ambient);
+	glMaterialfv(GL_FRONT, GL_SHININESS, material_shininess);
+	//조명 종료
+	Moon();
+
+	glDisable(GL_LIGHT1);
+	glDisable(GL_LIGHTING);
+//	glDisable(GL_DEPTH_TEST); 
+	glTranslatef(0, 0, 0.5);
+
+	Stardust(); //무수한 별
+	Sk(); //이니셜 별
+	
+	Night_Timer();
+	
+
+	glPopMatrix();
+
+} // MyDisplay_star
+
+
+
+//별 하나
+void Star() {
+
+	glColor3f(1, 1, 1);
+	glScalef(0.03, 0.03, 1);
+	glBegin(GL_POLYGON); //별똥별 별
+	glVertex3f(0, -0.5, 0);
+	glVertex3f(0.5, -0.8, 0);
+	glVertex3f(0.3, -0.3, 0);
+	glVertex3f(0.8, 0.1, 0);
+	glVertex3f(0.2, 0.1, 0);
+	glVertex3f(0, 0.8, 0);
+	glVertex3f(-0.2, 0.1, 0);
+	glVertex3f(-0.8, 0.1, 0);
+	glVertex3f(-0.3, -0.3, 0);
+	glVertex3f(-0.5, -0.8, 0);
+	glEnd();
+
+}
+
+//입체 달
+void Moon() {
+
+	glEnable(GL_LIGHTING);
+	glEnable(GL_LIGHT1);
+	glEnable(GL_DEPTH_TEST); // z-버퍼 켜기
+	glPushMatrix();
+	glTranslatef(-2, 2.5, 0);
+	glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, gYellow);
+	glMaterialfv(GL_FRONT, GL_SPECULAR, gWhite);
+	glMaterialfv(GL_FRONT, GL_SHININESS, polished);
+	glutSolidSphere(0.2, 40, 40); //빨간행성
+	glPopMatrix();
+
+	glDisable(GL_LIGHTING);
+	glDisable(GL_LIGHT1);
+	glDisable(GL_DEPTH_TEST); 
+
+}
+void Shooting() {
+
+	glColor3f(0, 1, 1);
+	glBegin(GL_LINES); //별똥별 꼬리
+	glVertex3f(1, 1, 0);
+	glVertex3f(-1, -1, 0);
+	glEnd();
+
+	glTranslatef(-1, -1, 0);
+	glScalef(0.1, 0.1, 0);
+	glBegin(GL_POLYGON); //별똥별 별
+	glVertex3f(0, -0.5, 0);
+	glVertex3f(0.5, -0.8, 0);
+	glVertex3f(0.3, -0.3, 0);
+	glVertex3f(0.8, 0.1, 0);
+	glVertex3f(0.2, 0.1, 0);
+	glVertex3f(0, 0.8, 0);
+	glVertex3f(-0.2, 0.1, 0);
+	glVertex3f(-0.8, 0.1, 0);
+	glVertex3f(-0.3, -0.3, 0);
+	glVertex3f(-0.5, -0.8, 0);
+	glEnd();
+}
+
+//무수한 별
+void Stardust() {
+
+	//별
+	for (int i = 0; i < 50; i++) {
+
+		GLfloat random_X = (float)(rand() % 100) / 10; //x축, -4.0~4.0까지
+		GLfloat random_Y = (float)(rand() % 75) / 10; //y축,-3.0~3.0까지
+
+		//printf("%f %f\n", random_X - 4, random_Y - 3); //테스트
+		glPushMatrix();
+		glTranslatef(random_X - 5, random_Y +0.01, 0);
+
+		Star();
+
+		glPopMatrix();
+
+	}
+
+}
+
+//이니셜 별
+void Sk() {
+
+	glPushMatrix();
+	glTranslatef(2,2, 0);
+
+	glPushMatrix();
+	glTranslatef(-0.1, 0, 0);
+	Star();
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(-0.25, 0.15, 0);
+	Star();;
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(-0.5, 0.15, 0);
+	Star();
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(-0.6, 0, 0);
+	Star();
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(-0.4, -0.2, 0);
+	Star();
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(-0.2, -0.3, 0);
+	Star();
+	glPopMatrix();
+
+
+	glPushMatrix();
+	glTranslatef(-0.3, -0.5, 0);
+	Star();
+	glPopMatrix();
+
+
+	glPushMatrix();
+	glTranslatef(-0.5, -0.5, 0);
+	Star();
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(-0.6, -0.35, 0);
+	Star();
+	glPopMatrix();
+
+	//K
+	glPushMatrix();
+	glTranslatef(0.4, 0, 0);
+	Star();
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(0.4, -0.3, 0);
+	Star();
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(0.4, -0.5, 0);
+	Star();
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(0.4, 0.2, 0);
+	Star();
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(0.9, 0.2, 0);
+	Star();
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(0.7, 0, 0);
+	Star();
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(0.7, -0.2, 0);
+	Star();
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(0.9, -0.4, 0);
+	Star();
+	glPopMatrix();
+
+	glPopMatrix();
+
+}
+
+void Shooting_Star() {
+
+	glPushMatrix();
+	glTranslatef(1, 1, 0);
+	Shooting();
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(0.2, 3, 0);
+	Shooting();
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(1.5, 1, 0);
+	Shooting();
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(2, 1.5, 0);
+	Shooting();
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(-1, 1.5, 0);
+	Shooting();
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(-2, 1.5, 0);
+	Shooting();
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(0.5, 2.5, 0);
+	Shooting();
+	glPopMatrix();
+
+}
+
+void Night_Timer() {
+
+	if (gTimeslot == 0) {
+		glTranslatef(1, 1, 0);
+		Shooting_Star();
+	}
+	if (gTimeslot == 1) {
+		glTranslatef(0.8, 0.8, 0);
+		Shooting_Star();
+	}
+	if (gTimeslot == 2) {
+		glTranslatef(0.5, 0.5, 0);
+		Shooting_Star();
+	}
+	if (gTimeslot == 3) {
+		glTranslatef(0.3, 0.3, 0);
+		Shooting_Star();
+	}
+	if (gTimeslot == 4) {
+		glTranslatef(0.15, 0.15, 0);
+		Shooting_Star();
+	}
+
+
+}
+
+void YourBear() {
+	GLfloat Size[2], Angle;
+
+	/////////상반부시작///////////////
+	glColor3f(0.4353, 0.3098, 0.1569);
+	glBegin(GL_POLYGON); //곰돌이 얼굴
+	for (Angle = 0.0; Angle <= 2.0 * Pi; Angle += Pi / 20.0)
+		glVertex3f(0.4 * cos(Angle), 0.4 * sin(Angle), 0.0);
+	glEnd();
+
+
+	glPushMatrix();
+	glTranslatef(-0.4, 0.2, 0);
+	glBegin(GL_POLYGON); //곰돌이 왼쪽귀
+	for (Angle = 0.0; Angle <= 2.0 * Pi; Angle += Pi / 20.0)
+		glVertex3f(0.15 * cos(Angle), 0.15 * sin(Angle), 0.0);
+	glEnd();
+	glPopMatrix();
+	glPushMatrix();
+	glTranslatef(0.4, 0.2, 0);
+	glBegin(GL_POLYGON); //곰돌이 오른쪽귀
+	for (Angle = 0.0; Angle <= 2.0 * Pi; Angle += Pi / 20.0)
+		glVertex3f(0.15 * cos(Angle), 0.15 * sin(Angle), 0.0);
+	glEnd();
+	glPopMatrix();
+
+	/////////상반부 끝///////////////
+
+
+	///////////////////////하반부 시작 ////////////////
+	glPushMatrix();
+	glTranslatef(0, -0.6, 0);
+	glBegin(GL_POLYGON); //곰돌이 몸통
+	for (Angle = 0.0; Angle <= 2.0 * Pi; Angle += Pi / 20.0)
+		glVertex3f(0.5 * cos(Angle), 0.5 * sin(Angle), 0.0);
+	glEnd();
+	glPopMatrix();
+	
+	glLineWidth(20);
+	glBegin(GL_LINES); // 왼쪽팔
+	glVertex3f(-0.4, -0.4, 0);
+	glVertex3f(-0.6, -0.5, 0);
+	glEnd();
+
+	glBegin(GL_LINES); //오른쪽팔
+	glVertex3f(0.4, -0.4, 0);
+	glVertex3f(0.6, -0.5, 0);
+	glEnd();
+
+	glPushMatrix(); //두다리 시작
+	GLfloat BearShear_arr[4][4] = { //두다리만 shear
+	{1,0,0,0},
+	{gBearShearleg,1,0,0},
+	{0,0,1,0},
+	{0,0,0,1},
+
+	};
+	glTranslatef(-0.3,-0.9, 0); //발끝고정 3
+	glMultMatrixf((float*)BearShear_arr);
+	// 발끝고정 2
+	glTranslatef(0.3, 0.9, 0); //발끝고정 1
+
+	glBegin(GL_LINES); //왼쪽다리
+	glVertex3f(-0.3, -0.9, 0);
+	glVertex3f(-0.3, -1.2, 0);
+	glEnd();
+	glBegin(GL_LINES); //오른쪽다리
+	glVertex3f(0.3, -0.9, 0);
+	glVertex3f(0.3, -1.2, 0);
+	glEnd();
+	glPopMatrix(); //두 다리 끝
+
+
+
+	//////////////////하반부 끝////////////////////
+
+
+	glPushMatrix();
+	glColor3f(0.9608, 0.7608, 0.6627 );
+	glTranslatef(0, -0.1, 0);
+	glBegin(GL_POLYGON); //곰돌이 입
+	for (Angle = 0.0; Angle <= 2.0 * Pi; Angle += Pi / 20.0)
+		glVertex3f(0.15 * cos(Angle), 0.15 * sin(Angle), 0.0);
+	glEnd();
+	glPopMatrix();
+
+
+	glColor3f(0, 0, 0);
+	glPushMatrix();
+	glEnable(GL_POINT_SMOOTH);
+	glPointSize(5);
+	glBegin(GL_POINTS); //곰돌이 눈
+	glVertex3f(-0.1, 0.05, 0);
+	glVertex3f(0.1, 0.05, 0);
+	glEnd();
+
+	glPointSize(10);
+	glBegin(GL_POINTS); //곰돌이  코
+	
+	glVertex3f(0, -0.1, 0);
+	glEnd();
+
+	glLineWidth(1);
+	glPopMatrix();
+
+
+
+
+
+}
+void YourBackground() {
+
+	
+
+	if (gBackground == 'D')
+		glColor3f(0, 1, 1); //sky
+	else
+		glColor3f(0, 0.05, 0.15);
+
+	
+	glBegin(GL_POLYGON);
+	glVertex3f(-10, 0, -3.9);
+	glVertex3f(10, 0, -3.9);
+	glVertex3f(10, 8, -3.9);
+	glVertex3f(-10, 8, -3.9);
+	glEnd();
+
+	if (gBackground == 'D') {
+		glColor3f(0, 1, 0); //green
+	}
+	else {
+		glColor3f(0, 0.3, 0); //블랙그린
+	}
+
+	glBegin(GL_POLYGON);
+	glVertex3f(-10, -8, -4);
+	glVertex3f(10, -8, -4);
+	glVertex3f(10, 0, -4);
+	glVertex3f(-10, 0, -4);
+	glEnd();
+	
+
+
+	if (gBackground == 'R') { //Rain
+		glColor3f(0.6, 0.6, 0.9); //비 색
+	
+
+		if (gTimeslot % 3 == 0) {
+			glPushMatrix();
+			glTranslatef(-2.8, 2, 0);
+			glBegin(GL_POLYGON);
+			glVertex3f(0, 0.1, 0);
+			glVertex3f(-0.05,0, 0);
+			glVertex3f(-0.04, -0.04, 0);
+			glVertex3f(0, -0.05, 0);
+			glVertex3f(0.04, -0.04, 0);
+			glVertex3f(0.05, 0, 0);
+			glEnd();
+			glPopMatrix();
+
+			glPushMatrix();
+			glTranslatef(2.5, 2.2, 0);
+			glBegin(GL_POLYGON);
+			glVertex3f(0, 0.1, 0);
+			glVertex3f(-0.05, 0, 0);
+			glVertex3f(-0.04, -0.04, 0);
+			glVertex3f(0, -0.05, 0);
+			glVertex3f(0.04, -0.04, 0);
+			glVertex3f(0.05, 0, 0);
+			glEnd();
+			glPopMatrix();
+
+		
+
+		}
+		else if (gTimeslot % 3 == 1) {
+
+			glPushMatrix();
+			glTranslatef(1.9, 1.5, 0);
+			glBegin(GL_POLYGON);
+			glVertex3f(0, 0.1, 0);
+			glVertex3f(-0.05, 0, 0);
+			glVertex3f(-0.04, -0.04, 0);
+			glVertex3f(0, -0.05, 0);
+			glVertex3f(0.04, -0.04, 0);
+			glVertex3f(0.05, 0, 0);
+			glEnd();
+			glPopMatrix();
+
+			glPushMatrix();
+			glTranslatef(-1.3, 0.5, 0);
+			glBegin(GL_POLYGON);
+			glVertex3f(0, 0.1, 0);
+			glVertex3f(-0.05, 0, 0);
+			glVertex3f(-0.04, -0.04, 0);
+			glVertex3f(0, -0.05, 0);
+			glVertex3f(0.04, -0.04, 0);
+			glVertex3f(0.05, 0, 0);
+			glEnd();
+			glPopMatrix();
+
+			glPushMatrix();
+			glTranslatef(-3.5, 1.0, 0);
+			glBegin(GL_POLYGON);
+			glVertex3f(0, 0.1, 0);
+			glVertex3f(-0.05, 0, 0);
+			glVertex3f(-0.04, -0.04, 0);
+			glVertex3f(0, -0.05, 0);
+			glVertex3f(0.04, -0.04, 0);
+			glVertex3f(0.05, 0, 0);
+			glEnd();
+			glPopMatrix();
+
+
+		}
+		else {
+			glPushMatrix();
+			glTranslatef(2.5, 0.5, 0);
+			glBegin(GL_POLYGON);
+			glVertex3f(0, 0.1, 0);
+			glVertex3f(-0.05, 0, 0);
+			glVertex3f(-0.04, -0.04, 0);
+			glVertex3f(0, -0.05, 0);
+			glVertex3f(0.04, -0.04, 0);
+			glVertex3f(0.05, 0, 0);
+			glEnd();
+			glPopMatrix();
+		}
+
+	}
+
+	if (gBackground == 'N') {
+
+		glPushMatrix();
+		MyDisplay_star();
+		glPopMatrix();
+
+		glTranslatef(0, 3, 0);
+		glLightfv(GL_LIGHT0, GL_POSITION, gLight_pos);
+		glColor3f(0.9, 0.9, 0.9);
+		//glutSolidSphere(0.05, 30, 30);
+		glTranslatef(0, -3, 0);
+
+		}
+
+}
+
+void YourMat() {
+
+	if (gBackground == 'D') {
+		glColor3f(0xE4 / 255.0, 0xBE / 255.0, 0xFE / 255.0); //연보라색
+	}
+	else
+		glColor3f(0.3, 0, 0.3); //블랙퍼플
+
+	/*
+	glBegin(GL_POLYGON);
+	glVertex3f(-1.5, -1.3, 0); //바닥에 펼쳐져있어야 하는데, 아직 2D라서
+	glVertex3f(1.2, -1.3, 0); //공중에 떠있는 평행사변형
+	glVertex3f(1.5, -0.8, 0); //조만간 3D로 가면, 진짜 바닥에 펼쳐진 매트로 전환!
+	glVertex3f(-1.5, -0.8, 0);
+	glEnd();
+	*/
+
+	glBegin(GL_POLYGON);
+	glVertex3f(-1.5, -1, 1.5); //바닥에 펼쳐진 정사각형
+	glVertex3f(1.5, -1, 1.5);
+	glVertex3f(1.5, -1, -1.5);
+	glVertex3f(-1.5, -1, -1.5);
+	glEnd();
+
+}
+
+void YourFace() {
+
+	if (gBackground == 'D') {
+		glColor3f(251 / 255.0, 206 / 255.0, 177 / 255.0); //살구색
+	}
+	else {
+		glColor3f(0.6, 0.4, 0.4);
+	}
+
+	if (gBackground == 'N') {
+		
+	
+		glEnable(GL_LIGHTING);
+		glEnable(GL_LIGHT0);
+		glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, gFace_color); //조명하의 얼굴색 넣는 함수
+		glEnable(GL_DEPTH_TEST); // z-버퍼 켜기
+
+	}
+	//실제얼굴
+	glPushMatrix();
+	glTranslatef(0, 1, 0);
+	glutSolidSphere(0.5, 50, 50);
+	glPopMatrix();
+
+	if (gBackground == 'N') {
+		glDisable(GL_LIGHTING);
+		glDisable(GL_DEPTH_TEST); // z-버퍼  끄기
+		
+	}
+
+} // YourFace 
+
+
+void YourEyeMouth() {
+
+	
+
+	if (gFace == 'a') {  // angry
+
+		glColor3f(0, 0, 0); // black
+
+		glBegin(GL_LINES);
+		glVertex3f(-0.3, 1.2, 0.0); // eye
+		glVertex3f(-0.1, 1.0, 0.0);
+		glVertex3f(0.1, 1.0, 0.0); // eye
+		glVertex3f(0.3, 1.2, 0.0);
+		glEnd();
+
+		glBegin(GL_LINE_LOOP); // mouth
+		glVertex3f(-0.1, 0.9, 0.0);
+		glVertex3f(0.1, 0.9, 0.0);
+		glVertex3f(0.1, 0.8, 0.0);
+		glVertex3f(-0.1, 0.8, 0.0);
+		glEnd();
+	}
+	else if (gFace == 's') { // smiling
+
+		glColor3f(0, 0, 0); // black
+
+		glBegin(GL_LINE_STRIP); // eye
+		glVertex3f(-0.3, 1.1, 0.0);
+		glVertex3f(-0.2, 1.15, 0.0);
+		glVertex3f(-0.1, 1.1, 0.0);
+		glEnd();
+		glBegin(GL_LINE_STRIP);	// eye
+		glVertex3f(0.1, 1.1, 0.0);
+		glVertex3f(0.2, 1.15, 0.0);
+		glVertex3f(0.3, 1.1, 0.0);
+		glEnd();
+
+		glColor3f(1, 0, 0); // red
+
+		glBegin(GL_LINE_LOOP); // mouth
+		glVertex3f(-0.1, 0.9, 0.0);
+		glVertex3f(0.1, 0.9, 0.0);
+		glVertex3f(0, 0.8, 0.0);
+		glEnd();
+	}
+	else if (gFace == 'u') { // usual
+
+		glColor3f(0, 0, 0); // black
+
+		glBegin(GL_LINES);
+		glVertex3f(-0.3, 1.1, 0.0); // eye
+		glVertex3f(-0.1, 1.1, 0.0);
+		glVertex3f(0.1, 1.1, 0.0); // eye
+		glVertex3f(0.3, 1.1, 0.0);
+		glVertex3f(-0.1, 0.9, 0.0); // mouth
+		glVertex3f(0.1, 0.9, 0.0);
+		glEnd();
+	}
+	
+} // YourEyeMouth
+
+
+
+void YourBody() {
+
+
+	glColor3f(0, 0, 0); // black neck
+
+	glBegin(GL_LINES);
+	glVertex3f(0, 0.5, 0.0);
+	glVertex3f(0, 0.3, 0.0);
+	glEnd();
+
+	glColor3f(0.5, 0.5, 0.5); // gray spine
+
+	glBegin(GL_POLYGON);
+	glVertex3f(-0.05, -0.3, 0.0);
+	glVertex3f(0.05, -0.3, 0.0);
+	glVertex3f(0.05, 0.3, 0.0);
+	glVertex3f(-0.05, 0.3, 0.0);
+	glEnd();
+
+
+	glLineWidth(3); // line 
+
+
+	//red 팔 전체 시작 4줄 추가
+	glPushMatrix();
+	glTranslatef(0.05, 0.3, 0.0);
+	glRotatef(gRedupperarm, 0, 0, 1);
+	glScalef(gRedarmlength, gRedarmlength, 1);
+	glTranslatef(-0.05, -0.3, 0.0);
+ 
+		glColor3f(1, 0, 0); // red arm
+		glBegin(GL_LINES); // upper
+			glVertex3f(0.05, 0.3, 0.0);
+			glVertex3f(0.25, 0.1, 0.0);
+			glEnd();
+
+			glPushMatrix();
+			glTranslatef(0.25, 0.1, 0);
+			glRotatef(gRedforearm, 0, 0, 1);
+			glTranslatef(-0.25, -0.1, 0);
+		glBegin(GL_LINES); // lower	
+		glVertex3f(0.25, 0.1, 0.0);
+		glVertex3f(0.5, -0.2, 0.0);
+
+		glEnd();
+		glPopMatrix();
+	glPopMatrix();
+
+	//black 팔 전체 시작 (4줄추가)
+	glPushMatrix();
+	glTranslatef(-0.05, 0.3, 0.0);
+	glRotatef(gBlackupperarm, 0, 0, 1);
+	glTranslatef(0.05, -0.3, 0.0);
+
+
+
+		glColor3f(0, 0, 0); // black arm
+
+		glBegin(GL_LINES); //upper
+		glVertex3f(-0.05, 0.3, 0.0);
+		glVertex3f(-0.25, 0.1, 0.0);
+		glEnd();
+
+		glPushMatrix();
+		glTranslatef(-0.25, 0.1, 0);
+
+		glRotatef(gBlackforearm, 0, 0, 1);
+		glTranslatef(0.25, -0.1, 0);
+		glBegin(GL_LINES); //lower
+		glVertex3f(-0.25, 0.1, 0.0);
+		glVertex3f(-0.5, -0.2, 0.0);
+		glEnd();
+		glPopMatrix();
+	glPopMatrix(); //black 전체 끝 
+
+
+	glPushMatrix(); //다리 두 개 묶음
+	GLfloat Shearleg_arr[4][4] = { //함수 안에있는거라서 이름 같아도 상관없음
+	{1,0,0,0},
+	{gShearleg,1,0,0},
+	{0,0,1,0},
+	{0,0,0,1},
+
+	};
+	glTranslatef(0, -0.3, 0); 
+	glMultMatrixf((float*)Shearleg_arr);
+	glTranslatef(0, 0.3, 0);
+
+	glColor3f(0, 0, 1); // blue leg
+	glPushMatrix();
+	glTranslatef(0.05, -0.3, 0); // (3) 다리를 원상 복귀
+	glRotatef(gBlueleg, 0, 0, 1); //(2)z축 기준 gBlueleg각도만큼 회전
+	glTranslatef(-0.05, 0.3, 0); //(1) 다리가 원점에서 시작하도록 이동
+	glBegin(GL_LINES);
+	glVertex3f(0.05, -0.3, 0.0);
+	glVertex3f(0.3, -1.0, 0.0);
+	glEnd();
+	glPopMatrix();
+
+	glColor3f(0, 0, 0); // black leg
+
+	glTranslatef(-0.05, -0.3, 0);
+	glRotatef(gBlackleg, 0, 0, 1);
+	glTranslatef(0.05, 0.3, 0);
+	glPushMatrix(); //push위치 translatef 위에가야하는거아닌가?상관없나?
+	glBegin(GL_LINES);
+	glVertex3f(-0.05, -0.3, 0.0);
+	glVertex3f(-0.3, -1.0, 0.0);
+	glEnd();
+	glPopMatrix();
+	glPopMatrix(); // 두 다리 끝
+
+
+	glLineWidth(1);  // line
+
+	
+
+} // YourBody
+void YourUmbrella() {
+
+	if (gBackground == 'R') {
+		
+		gBlackforearm = -80;
+		gBlackupperarm = 0;
+		glPushMatrix();
+		glTranslatef(-0.5, 1.5, 0);
+
+		glColor3f(0.6, 0.6, 0);
+		glRotatef(-90, 1, 0, 0);
+		glScalef(1.5, 1, 1);
+		glutSolidCone(1.0, 1.5, 12, 12);
+
+
+
+		glPopMatrix();
+
+		glPushMatrix();
+		glTranslatef(-0.5, 1.5, 0);
+
+		glBegin(GL_POLYGON);
+		glVertex3f(0, 0, 0);
+		glVertex3f(0, -1.5, 0);
+		glVertex3f(0.08, -1.5, 0);
+		glVertex3f(0.08, 0, 0);
+
+		glEnd();
+		glPopMatrix();
+
+		GLfloat  Angle;
+
+		glPushMatrix();
+		glColor3f(1, 1, 1);
+		glPointSize(20);
+		glBegin(GL_POINTS);
+		glVertex3f(0.0, 2.2,0);
+		glVertex3f(-0.5, 1.7, 0);
+		glVertex3f(-1.2, 2.1, 0);
+		glVertex3f(0.15, 1.55, 0);
+		glVertex3f(-1, 1.45, 0);
+
+		glEnd();
+
+		glPopMatrix();
+
+	}
+
+}
+
+void YourBearUmbrella() {
+
+	if (gBackground == 'R') {
+
+		glPushMatrix();
+
+		glTranslatef(0.45, 0.3, 0);
+
+		glColor3f(0.8, 0.4, 0.4);
+		glRotatef(-90, 1, 0, 0);
+		glScalef(2.5, 1, 1);
+
+		glutSolidCone(0.5, 1.0, 10, 10);
+
+		glPopMatrix();
+
+
+
+		glPushMatrix();
+		glTranslatef(0.45, 0.3, 0);
+
+
+		glBegin(GL_POLYGON);
+		glVertex3f(0, 0, 0);
+		glVertex3f(0, -1.0, 0);
+		glVertex3f(0.08, -1.0, 0);
+		glVertex3f(0.08, 0, 0);
+
+
+		glEnd();
+		glPopMatrix();
+
+
+	}
+
+}
+
+
+
+void MyKeyboard(unsigned char key, int x, int y) {
+
+	switch (key) {
+
+	case 'Q':
+	case 'q':	exit(0);  break;
+
+	case 'a':
+	case 's':
+	case 'u':   gFace = key;   break;	 // face
+
+	case 'l': gBlueleg += 10; break;
+	case 'k': gBlueleg -= 10; break;
+	case 'd': gBlackleg += 10; break;
+	case 'f': gBlackleg -= 10; break;
+
+	case 'p': if(gRedforearm <90)gRedforearm += 3; break;
+	case 'o': if(gRedforearm >-90) gRedforearm -= 3; break;
+
+	case 'r': if (gBlackforearm < 90)gBlackforearm += 3; break;
+		
+	
+	
+	case 'e': if (gBlackforearm > -90)gBlackforearm -= 3; break;
+	
+
+	case 'P': if (gRedupperarm < 90)gRedupperarm += 3; break;
+	case 'O': if (gRedupperarm > -90) gRedupperarm -= 3; break;
+
+	case 'R': if (gBlackforearm < 90) gBlackupperarm += 3; break;
+	case 'E': if (gBlackforearm > -90) gBlackupperarm -= 3; break;
+		
+
+		
+	case '0':  gRedarmlength *= 1.1; break; //숫자 0이랑 9임
+	case '9': if(gRedarmlength > 1)  gRedarmlength /= 1.1; break;
+
+
+	}
+
+	glutPostRedisplay();
+
+} // MyKeyboard
+
+void MySpecial(int key, int x, int y) {
+
+	switch (key) {
+
+	case GLUT_KEY_UP: 	gY = 1;  
+		gRedforearm = 30; gBlackforearm = -30; gBlueleg = -19.5; gBlackleg = 19.5;
+		break;
+
+	case GLUT_KEY_DOWN: gY = 0;	 
+		gRedforearm = 0; gBlackforearm = 0; gBlueleg= 0, gBlackleg = 0;
+		break;
+
+	case GLUT_KEY_LEFT:
+		if (gY == 0) {
+			gX -= 0.1;
+			if (gX < -1.5 || gX >1.5) gFace = 'a'; else gFace = 'u'; break;
+		}
+	case GLUT_KEY_RIGHT:
+		if (gY == 0) {
+			gX += 0.1;
+			if (gX < -1.5 || gX >1.5) gFace = 'a'; else gFace = 'u'; break;
+			break;
+		}
+
+
+	case GLUT_KEY_F1: gShear = -0.5; gFace = 's'; //전신 왼쪽
+		gRedupperarm = 48; gBlackupperarm = -48; 
+		gBearShear = -0.5;
+		break;
+	case GLUT_KEY_F2: gShear = 0.0; gFace = 'u'; 
+		gRedupperarm = 0; gBlackupperarm = -0;  
+		gBearShear = 0.0;
+		break;
+
+	case GLUT_KEY_F3: gShear = 0.5; gFace = 's'; 
+		gRedupperarm = 48; gBlackupperarm = -48; 
+		gBearShear = 0.5;
+		break;
+
+
+	case GLUT_KEY_F4: gShearleg = 0.5; gFace = 's'; //다리 왼쪽
+		gRedupperarm = 48; gBlackupperarm = -48; 
+		gBearShearleg = 0.5;
+		break;
+	case GLUT_KEY_F5: gShearleg = 0.0; gFace = 'u';
+		gRedupperarm = 0; gBlackupperarm = 0;  
+		gBearShearleg = 0; 
+		break;
+
+	case GLUT_KEY_F6: gShearleg = -0.5; gFace = 's';
+		gRedupperarm = 48; gBlackupperarm = -48; 
+		gBearShearleg = -0.5; 
+		break;
+
+	case GLUT_KEY_F11: if(gZ <= 3) gZ += 0.1; break;
+	case GLUT_KEY_F12:	if (gZ >= -3) gZ -= 0.1; break;
+
+	}//switch
+
+
+	glutPostRedisplay();
+
+} // MySpecial 
+
+void MyMotion(GLint X, GLint Y) {
+	gBearX = (GLfloat)X / gNewWidth * 8 * gWidthFactor - 4 * gWidthFactor;
+	gBearY = (GLfloat)(gNewHeight - Y) / gNewHeight * 6 * gHeightFactor - 3 * gHeightFactor;
+	glutPostRedisplay();
+
+}
+
+void MyReshape(int NewWidth, int NewHeight) {
+
+	glViewport(0, 0, NewWidth, NewHeight);
+	GLfloat WidthFactor = (GLfloat)NewWidth / (GLfloat)WIN_WIDTH;
+	GLfloat HeightFactor = (GLfloat)NewHeight / (GLfloat)WIN_HEIGHT;
+
+	gNewWidth = NewWidth, gNewHeight = NewHeight;
+	gWidthFactor = WidthFactor, gHeightFactor = HeightFactor;
+
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	//glOrtho(-4.0 * WidthFactor, 4.0 * WidthFactor, -3.0 * HeightFactor, 3.0 * HeightFactor, 1,9);
+	gluPerspective(65, (GLfloat)NewWidth / (GLfloat)NewHeight, 1, 9); //원근투영 -1~-9
+
+} // MyReshape
+
+
+void MyTimer(int Value) {
+	if (gBackground == 'R') {
+		gTimeslot = (gTimeslot + 1) % 20; //0~99반복, 굳이 없어도 됨 
+		//printf("gTimeslot : %d \n", gTimeslot);
+		glutPostRedisplay();
+		glutTimerFunc(300, MyTimer, 1);
+	}
+}
+
+void MyTimerRain(int Value) {
+
+	if (gBackground != 'R') return;
+
+	gTimeslot = (gTimeslot + 1) % 100;
+
+	glutPostRedisplay();
+	glutTimerFunc(200, MyTimerRain, 1);
+
+}
+
+void MyTimerNight(int Value) {
+	
+	if (gBackground != 'N') return;
+
+	
+	//막시무스의 움직임
+	gTimeslot = (gTimeslot + 1) % 20; //%100이면 0~99 반복, 130이면 0~129반복
+/*
+	
+	if (gTimeslot < 5) {
+		gY = 1; gFace = 's';
+		gRedforearm = 30; gBlackforearm = -30; gBlueleg = -19.5; gBlackleg = 19.5; //jump
+	}
+	else if (gTimeslot < 10) {
+		gY = 0;	 gFace = 'u';
+		gRedforearm = 0; gBlackforearm = 0; gBlueleg= 0, gBlackleg = 0; //down
+	}
+		
+	else if (gTimeslot < 30 || gTimeslot >= 70 && gTimeslot < 90){
+		if (gY == 0) {
+			gX -= 0.1;
+			if (gX < -1.5 || gX >1.5) gFace = 'a'; else gFace = 'u';  //20만큼 왼쪽, 40만큼 오른쪽, 20만큼 왼쪽 이동(제자리)
+		}
+	}
+
+	else if (gTimeslot < 70) {
+		if (gY == 0) {
+			gX += 0.1;
+			if (gX < -1.5 || gX >1.5) gFace = 'a'; else gFace = 'u';
+		}
+	}
+
+	else if (gTimeslot == 90 || gTimeslot == 91 || gTimeslot == 94 || gTimeslot == 95) { //왼쪽
+
+		gShearleg = 0.5; gFace = 's'; //다리 왼쪽
+		gRedupperarm = 48; gBlackupperarm = -48;
+		gBearShearleg = 0.5;
+
+	}
+
+	
+	else if (gTimeslot == 92 || gTimeslot == 93 || gTimeslot == 96 || gTimeslot == 97) { //오른쪽
+
+	 gShearleg = -0.5; gFace = 's';
+		gRedupperarm = 48; gBlackupperarm = -48;
+		gBearShearleg = -0.5;
+	}
+	else if(gTimeslot < 100){ //중앙(원위치)
+		gShearleg = 0.0; gFace = 'u';
+		gRedupperarm = 0; gBlackupperarm = 0;
+		gBearShearleg = 0;
+	
+	}
+	else if (gTimeslot < 107) { //전신 왼쪽 전단
+	gShear = -0.5; gFace = 's'; //전신 왼쪽
+	gRedupperarm = 48; gBlackupperarm = -48;
+	gBearShear = -0.5;
+
+	}
+	else if (gTimeslot < 110) { //전신 오른쪽 전단
+		gShear = 0.5; gFace = 's';
+		gRedupperarm = 48; gBlackupperarm = -48;
+		gBearShear = 0.5;
+	}
+	else {
+		gShear = 0.0; gFace = 'u';
+		gRedupperarm = 0; gBlackupperarm = -0;
+		gBearShear = 0.0;
+
+	}
+	
+	//꽃의 움직임
+
+	if (gTimeslot < 60)gBearX += 0.1;
+	else gBearX -= 0.001;
+	
+	*/
+	glutPostRedisplay();
+	glutTimerFunc(80, MyTimerNight, 1);
+	  
+}
+
+
+
+void MyMainMenu(int entryID) {
+
+	if (entryID == 1) {
+		glClearColor(1, 1, 1, 1); gBackground = 'D';
+		gBlackforearm = 0;
+		gBlackupperarm = 0;
+	}
+	else if (entryID == 2) {
+		
+		glClearColor(0, 0, 0, 0); gBackground = 'N';
+		gBlackforearm = 0;
+		gBlackupperarm = 0;
+		gTimeslot = 0; glutTimerFunc(80, MyTimerNight, 1); //초기화 후 시작
+		
+
+	}
+	else if (entryID == 3) {
+		glClearColor(0, 0, 0, 0); gBackground = 'R';
+		gBlackforearm = -80;
+		gBlackupperarm = 0;
+		gTimeslot = 0;  glutTimerFunc(300, MyTimerRain, 1);
+	}
+	
+	else if (entryID == 4) {
+		glClearColor(0, 0, 0.5, 0); gBackground = 'S';
+		gBlackforearm = -80;
+		gBlackupperarm = 0;
+		gTimeslot = 0;  //glutTimerFunc(300, MyTimerRain, 1);
+	}
+
+
+
+
+	glutPostRedisplay();
+
+}
+
+
+void MyInit() {
+	glClearColor(1.0, 1.0, 1.0, 1.0);
+	//glEnable(GL_DEPTH_TEST); // z-버퍼 켜기
+	
+	// menu callback 
+	GLint MyMainMenuID = glutCreateMenu(MyMainMenu);
+	glutAddMenuEntry("Day", 1);
+	glutAddMenuEntry("Night", 2);
+	glutAddMenuEntry("Rain", 3);
+	glutAddMenuEntry("SpotLight", 4);
+
+	glutAttachMenu(GLUT_RIGHT_BUTTON);
+
+
+
+} // MyInit
+
+
+int main(int argc, char** argv) {
+
+	glutInit(&argc, argv);
+	glutInitDisplayMode(GLUT_RGB |GLUT_DOUBLE | GLUT_DEPTH);
+	glutInitWindowSize(WIN_WIDTH, WIN_HEIGHT);
+	glutInitWindowPosition(150, 0);
+	glutCreateWindow("Maximus");
+	MyInit();
+	glutDisplayFunc(MyDisplay);
+	glutReshapeFunc(MyReshape);
+	glutKeyboardFunc(MyKeyboard);
+	glutSpecialFunc(MySpecial);
+	glutMotionFunc(MyMotion);
+	glutMainLoop();
+	return 0;
+}
